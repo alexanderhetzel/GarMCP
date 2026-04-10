@@ -28,13 +28,53 @@ const TICKET_REGEX = /ticket=([^"]+)"/;
 const TITLE_REGEX = /<title>(.+?)<\/title>/;
 const SSO_VERIFY_MFA = 'https://sso.garmin.com/sso/verifyMFA/loginEnterMfaCode';
 
-const TOKEN_DIR = path.join(os.homedir(), '.garmin-mcp');
+function resolveTokenDir(): string {
+  const configured = process.env.GARMIN_TOKEN_DIR?.trim();
+  if (!configured) return path.join(os.homedir(), '.garmin-mcp');
+  return path.isAbsolute(configured) ? configured : path.resolve(configured);
+}
+
+const TOKEN_DIR = resolveTokenDir();
 const OAUTH1_TOKEN_FILE = 'oauth1_token.json';
 const OAUTH2_TOKEN_FILE = 'oauth2_token.json';
 const PROFILE_FILE = 'profile.json';
 
 const MAX_REQUEST_RETRIES = 3;
 const TOKEN_EXPIRY_BUFFER_SECONDS = 60;
+const DEFAULT_MAX_CONCURRENT_REQUESTS = 4;
+const MAX_CONCURRENT_REQUESTS = Number.parseInt(
+  process.env.GARMIN_MAX_CONCURRENT_REQUESTS ?? String(DEFAULT_MAX_CONCURRENT_REQUESTS),
+  10,
+);
+
+let activeRequestCount = 0;
+const requestWaitQueue: Array<() => void> = [];
+
+async function acquireRequestSlot(): Promise<void> {
+  if (!Number.isFinite(MAX_CONCURRENT_REQUESTS) || MAX_CONCURRENT_REQUESTS <= 0) return;
+  if (activeRequestCount >= MAX_CONCURRENT_REQUESTS) {
+    await new Promise<void>((resolve) => {
+      requestWaitQueue.push(resolve);
+    });
+  }
+  activeRequestCount += 1;
+}
+
+function releaseRequestSlot(): void {
+  if (!Number.isFinite(MAX_CONCURRENT_REQUESTS) || MAX_CONCURRENT_REQUESTS <= 0) return;
+  activeRequestCount = Math.max(0, activeRequestCount - 1);
+  const next = requestWaitQueue.shift();
+  if (next) next();
+}
+
+async function withRequestSlot<T>(task: () => Promise<T>): Promise<T> {
+  await acquireRequestSlot();
+  try {
+    return await task();
+  } finally {
+    releaseRequestSlot();
+  }
+}
 
 type OAuth1Token = {
   oauth_token: string;
@@ -109,12 +149,12 @@ export class GarminAuth {
 
     for (let attempt = 0; attempt <= MAX_REQUEST_RETRIES; attempt++) {
       try {
-        const response = await axios<T>({
+        const response = await withRequestSlot(() => axios<T>({
           url,
           method,
           headers: reqHeaders,
           data: options?.body,
-        });
+        }));
         return response.data;
       } catch (error: unknown) {
         if (!axios.isAxiosError(error)) throw error;
@@ -278,7 +318,7 @@ export class GarminAuth {
     if (title.includes('MFA')) {
       if (!this.promptMfa) {
         throw new Error(
-          'MFA is required but no MFA handler is available. Run "npx @nicolasvegam/garmin-connect-mcp setup" to authenticate interactively.',
+          'MFA is required but no interactive MFA handler is available in this runtime. Run "npx @nicolasvegam/garmin-connect-mcp setup" in an interactive environment and persist tokens to GARMIN_TOKEN_DIR.',
         );
       }
 

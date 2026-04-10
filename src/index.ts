@@ -1,21 +1,5 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { GarminClient } from './client';
-import {
-  registerActivityTools,
-  registerHealthTools,
-  registerTrendTools,
-  registerSleepTools,
-  registerBodyTools,
-  registerPerformanceTools,
-  registerProfileTools,
-  registerRangeTools,
-  registerSnapshotTools,
-  registerTrainingTools,
-  registerWellnessTools,
-  registerChallengeTools,
-  registerWriteTools,
-} from './tools';
+import { createGarminServer } from './server';
 
 const GARMIN_EMAIL = process.env.GARMIN_EMAIL;
 const GARMIN_PASSWORD = process.env.GARMIN_PASSWORD;
@@ -29,26 +13,9 @@ if (!GARMIN_EMAIL || !GARMIN_PASSWORD) {
   process.exit(1);
 }
 
-const server = new McpServer({
-  name: 'garmin-connect-mcp',
-  version: '1.0.0',
+const server = createGarminServer(GARMIN_EMAIL, GARMIN_PASSWORD, {
+  enableWriteTools: true,
 });
-
-const client = new GarminClient(GARMIN_EMAIL, GARMIN_PASSWORD);
-
-registerActivityTools(server, client);
-registerHealthTools(server, client);
-registerTrendTools(server, client);
-registerSleepTools(server, client);
-registerBodyTools(server, client);
-registerPerformanceTools(server, client);
-registerProfileTools(server, client);
-registerRangeTools(server, client);
-registerSnapshotTools(server, client);
-registerTrainingTools(server, client);
-registerWellnessTools(server, client);
-registerChallengeTools(server, client);
-registerWriteTools(server, client);
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();

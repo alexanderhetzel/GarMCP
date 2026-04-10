@@ -86,6 +86,32 @@ GARMIN_EMAIL=you@email.com GARMIN_PASSWORD=yourpass npx -y @nicolasvegam/garmin-
 
 The server communicates over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/).
 
+## Cloud Deployment (Remote MCP over Streamable HTTP)
+
+This repository now includes an HTTP MCP server for remote clients (Claude Web/Mobile):
+
+- MCP endpoint: `POST/GET/DELETE /mcp` (configurable with `MCP_PATH`)
+- Health endpoint: `GET /health`
+- Transport: Streamable HTTP
+
+### Environment variables
+
+- Required:
+  - `GARMIN_EMAIL`
+  - `GARMIN_PASSWORD`
+- Optional:
+  - `GARMIN_TOKEN_DIR` (default: `~/.garmin-mcp`)
+  - `MCP_PORT` (fallback to `PORT`, default `8080`)
+  - `MCP_PATH` (default `/mcp`)
+  - `MCP_ALLOWED_ORIGINS` (comma-separated, example: `https://claude.ai`; required when requests include an `Origin` header)
+  - `MCP_ENABLE_WRITE_TOOLS` (default `false`)
+  - `GARMIN_MAX_CONCURRENT_REQUESTS` (default `4`; set `<=0` to disable)
+
+### Start commands
+
+- HTTP (cloud): `npm start` or `npm run start:http`
+- stdio (local MCP clients): `npm run start:stdio`
+
 ## Available Tools
 
 ### Activities (12 tools)
@@ -208,7 +234,7 @@ npm run build
 To test locally:
 
 ```bash
-GARMIN_EMAIL=you@email.com GARMIN_PASSWORD=yourpass npm start
+GARMIN_EMAIL=you@email.com GARMIN_PASSWORD=yourpass npm run start:stdio
 ```
 
 ## Credits

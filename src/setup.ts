@@ -10,8 +10,9 @@ function ask(question: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  const tokenDir = process.env.GARMIN_TOKEN_DIR ?? '~/.garmin-mcp';
   console.error('Garmin Connect MCP — Interactive Setup');
-  console.error('This will authenticate with Garmin Connect and save tokens to ~/.garmin-mcp/\n');
+  console.error(`This will authenticate with Garmin Connect and save tokens to ${tokenDir}\n`);
 
   const email = process.env.GARMIN_EMAIL ?? await ask('Garmin email: ');
   const password = process.env.GARMIN_PASSWORD ?? await ask('Garmin password: ');
@@ -30,7 +31,7 @@ async function main(): Promise<void> {
     await auth.request('/userprofile-service/socialProfile');
     console.error('\nAuthentication successful!');
     console.error(`Logged in as: ${auth.displayName}`);
-    console.error('Tokens saved to ~/.garmin-mcp/');
+    console.error(`Tokens saved to ${tokenDir}`);
     console.error('\nYou can now restart Claude Desktop — the MCP server will use the saved tokens.');
   } catch (error) {
     console.error('\nAuthentication failed:', error instanceof Error ? error.message : error);

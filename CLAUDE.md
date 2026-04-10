@@ -1,42 +1,42 @@
 # Garmin Connect MCP Server
 
-MCP server para Garmin Connect en TypeScript. 61 tools para acceso a datos de fitness, salud y entrenamiento.
+MCP server for Garmin Connect in TypeScript. 61 tools for accessing fitness, health, and training data.
 
 ---
 
-## 1. Estructura del Proyecto
+## 1. Project Structure
 
 ```
 src/
   index.ts              Entry point: MCP server + stdio transport
   client/
-    garmin-auth.ts       Autenticacion SSO + OAuth1/OAuth2 (basado en python-garminconnect)
-    garmin.client.ts     Cliente con metodos para cada endpoint
+    garmin-auth.ts       SSO authentication + OAuth1/OAuth2 (based on python-garminconnect)
+    garmin.client.ts     Client with methods for each endpoint
     index.ts             Barrel
   constants/
-    garmin-endpoints.ts  URLs de la API de Garmin Connect
+    garmin-endpoints.ts  Garmin Connect API URLs
     index.ts             Barrel
   dtos/
-    date-params.dto.ts   Params de fecha (tipo + schema Zod)
-    activities.dto.ts    Params de actividades
-    devices.dto.ts       Params de dispositivos
+    date-params.dto.ts   Date params (type + Zod schema)
+    activities.dto.ts    Activity params
+    devices.dto.ts       Device params
     index.ts             Barrel
   tools/
-    activities.tools.ts  Tools de actividades (12)
-    health.tools.ts      Tools de salud diaria (14)
-    trends.tools.ts      Tools de tendencias (4)
-    sleep.tools.ts       Tools de sueno (2)
-    body.tools.ts        Tools de composicion corporal (5)
-    performance.tools.ts Tools de performance y training (11)
-    profile.tools.ts     Tools de perfil y dispositivos (13)
+    activities.tools.ts  Activity tools (12)
+    health.tools.ts      Daily health tools (14)
+    trends.tools.ts      Trend tools (4)
+    sleep.tools.ts       Sleep tools (2)
+    body.tools.ts        Body composition tools (5)
+    performance.tools.ts Performance and training tools (11)
+    profile.tools.ts     Profile and device tools (13)
     index.ts             Barrel
 ```
 
 ---
 
-## 2. DTOs: Tipo Explicito + Schema Zod
+## 2. DTOs: Explicit Type + Zod Schema
 
-Cada DTO tiene un `type` explicito y un `schema` Zod paralelo. El tipo nunca se infiere del schema con `z.infer<>`.
+Each DTO has an explicit `type` and a parallel Zod `schema`. The type is never inferred from the schema with `z.infer<>`.
 
 ```typescript
 export type DateRangeParamDto = {
@@ -52,9 +52,9 @@ export const dateRangeParamSchema = z.object({
 
 ---
 
-## 3. Tools MCP: Patron registerTool
+## 3. MCP Tools: `registerTool` Pattern
 
-Cada tool usa `server.registerTool` con config object e inputSchema usando `.shape` del Zod schema.
+Each tool uses `server.registerTool` with a config object and `inputSchema` using `.shape` from the Zod schema.
 
 ```typescript
 server.registerTool(
@@ -76,7 +76,7 @@ server.registerTool(
 
 ## 4. Barrel Exports
 
-Cada carpeta tiene un `index.ts` que re-exporta todo. Los imports usan la carpeta, sin extension.
+Each folder has an `index.ts` that re-exports everything. Imports use the folder path, without an extension.
 
 ```typescript
 export { GarminClient } from './garmin.client';
@@ -89,58 +89,58 @@ import { dateParamSchema } from '../dtos';
 
 ---
 
-## 5. Convenciones de Nombrado
+## 5. Naming Conventions
 
-| Patron | Convencion | Ejemplo |
+| Pattern | Convention | Example |
 |--------|-----------|---------|
-| Clases | PascalCase | `GarminClient` |
-| Variables/funciones | camelCase | `getActivities`, `todayString` |
-| Archivos | kebab-case | `garmin.client.ts`, `date-params.dto.ts` |
-| Constantes | UPPERCASE | `DAILY_HEART_RATE_ENDPOINT` |
-| Booleanos | Prefijo `is/has` | `isAuthenticated` |
-| Funciones | Empiezan con verbo | `getSteps`, `ensureAuthenticated` |
-| DTOs tipo | `{Verbo}{Algo}Dto` | `GetActivitiesDto` |
-| DTOs schema | `{verbo}{Algo}Schema` | `getActivitiesSchema` |
-| Tools files | `{categoria}.tools.ts` | `health.tools.ts` |
+| Classes | PascalCase | `GarminClient` |
+| Variables/functions | camelCase | `getActivities`, `todayString` |
+| Files | kebab-case | `garmin.client.ts`, `date-params.dto.ts` |
+| Constants | UPPERCASE | `DAILY_HEART_RATE_ENDPOINT` |
+| Booleans | `is/has` prefix | `isAuthenticated` |
+| Functions | Start with a verb | `getSteps`, `ensureAuthenticated` |
+| DTO types | `{Verb}{Thing}Dto` | `GetActivitiesDto` |
+| DTO schemas | `{verb}{Thing}Schema` | `getActivitiesSchema` |
+| Tool files | `{category}.tools.ts` | `health.tools.ts` |
 | Register functions | `register{Cat}Tools` | `registerHealthTools` |
 
 ---
 
-## 6. Stack Tecnico
+## 6. Technical Stack
 
-| Componente | Eleccion |
+| Component | Choice |
 |------------|----------|
 | Runtime | Node.js 20+ |
-| Lenguaje | TypeScript (strict) |
+| Language | TypeScript (strict) |
 | MCP SDK | `@modelcontextprotocol/sdk` |
 | HTTP Client | `axios` + `tough-cookie` |
 | OAuth | `oauth-1.0a` (HMAC-SHA1) |
-| Validacion | `zod` |
+| Validation | `zod` |
 | Transport | stdio |
 | Build | `tsup` (ESM, node20 target) |
-| Module Resolution | Bundler (sin extensiones .js en imports) |
+| Module Resolution | Bundler (no `.js` extensions in imports) |
 
 ---
 
-## 7. Autenticacion
+## 7. Authentication
 
-Flujo basado en `python-garminconnect` (cyberjunky) via `garth`:
+Flow based on `python-garminconnect` (cyberjunky) via `garth`:
 
-1. Fetch OAuth consumer credentials desde S3
+1. Fetch OAuth consumer credentials from S3
 2. SSO login (embed → signin → POST credentials → extract ticket)
 3. Exchange ticket → OAuth1 token (HMAC-SHA1 signed)
 4. Exchange OAuth1 → OAuth2 token (Bearer)
-5. Auto-refresh OAuth2 en 401 usando OAuth1
-6. Tokens persistidos en `~/.garmin-mcp/` (oauth1_token.json, oauth2_token.json)
+5. Auto-refresh OAuth2 on 401 using OAuth1
+6. Tokens persisted in `~/.garmin-mcp/` (`oauth1_token.json`, `oauth2_token.json`)
 
 ---
 
-## 8. Reglas
+## 8. Rules
 
-- Sin comentarios en el codigo
-- Imports locales sin extension (`.js` ni `.ts`)
-- Imports de librerias externas con su path completo (`@modelcontextprotocol/sdk/server/mcp.js`)
-- `console.error()` para logging (nunca `console.log` en servidores stdio)
-- Autenticacion via env vars `GARMIN_EMAIL` y `GARMIN_PASSWORD`
-- Tokens cacheados en `~/.garmin-mcp/`
-- Retry automatico con re-auth si un request falla con 401
+- No comments in code
+- Local imports without extension (no `.js` or `.ts`)
+- External library imports with full path (`@modelcontextprotocol/sdk/server/mcp.js`)
+- `console.error()` for logging (never `console.log` in stdio servers)
+- Authentication via env vars `GARMIN_EMAIL` and `GARMIN_PASSWORD`
+- Tokens cached in `~/.garmin-mcp/`
+- Automatic retry with re-auth if a request fails with 401
