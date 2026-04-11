@@ -31,6 +31,8 @@ const SSO_VERIFY_MFA = 'https://sso.garmin.com/sso/verifyMFA/loginEnterMfaCode';
 function resolveTokenDir(): string {
   const configured = process.env.GARMIN_TOKEN_DIR?.trim();
   if (!configured) return path.join(os.homedir(), '.garmin-mcp');
+  if (configured === '~') return os.homedir();
+  if (configured.startsWith('~/')) return path.join(os.homedir(), configured.slice(2));
   return path.isAbsolute(configured) ? configured : path.resolve(configured);
 }
 

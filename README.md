@@ -100,7 +100,7 @@ This repository now includes an HTTP MCP server for remote clients (Claude Web/M
   - `GARMIN_EMAIL`
   - `GARMIN_PASSWORD`
 - Optional:
-  - `GARMIN_TOKEN_DIR` (default: `~/.garmin-mcp`)
+  - `GARMIN_TOKEN_DIR` (default: `~/.garmin-mcp`; use an absolute path for `.env` files, e.g. `/Users/your-user/.garmin-mcp`)
   - `MCP_PORT` (fallback to `PORT`, default `8080`)
   - `MCP_PATH` (default `/mcp`)
   - `MCP_ALLOWED_ORIGINS` (comma-separated, example: `https://claude.ai`; required when requests include an `Origin` header)
@@ -205,7 +205,7 @@ This repository now includes an HTTP MCP server for remote clients (Claude Web/M
 
 ## Authentication
 
-Uses Garmin Connect credentials (email/password) via environment variables. OAuth tokens are cached in `~/.garmin-mcp/` to avoid re-authentication on each request.
+Uses Garmin Connect credentials (email/password) via environment variables. OAuth tokens are cached in `~/.garmin-mcp/` (or in `GARMIN_TOKEN_DIR` if set) to avoid re-authentication on each request.
 
 ### MFA (Multi-Factor Authentication)
 
@@ -218,7 +218,7 @@ GARMIN_EMAIL='you@email.com' GARMIN_PASSWORD='yourpass' npx -y @nicolasvegam/gar
 This will:
 1. Log in to Garmin Connect
 2. Prompt you for the MFA code sent to your email or authenticator app
-3. Save OAuth tokens to `~/.garmin-mcp/`
+3. Save OAuth tokens to `~/.garmin-mcp/` (or `GARMIN_TOKEN_DIR` if set)
 
 After setup, the MCP server will use the saved tokens automatically — no MFA prompt needed until the tokens expire. When they do, simply run the setup command again.
 
