@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
-import { dateParamSchema } from '../dtos';
+import { GarminClient } from '../client/index.js';
+import { dateParamSchema } from '../dtos/index.js';
 
 export function registerSleepTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

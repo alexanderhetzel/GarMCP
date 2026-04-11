@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
+import { GarminClient } from '../client/index.js';
 
 export function registerChallengeTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

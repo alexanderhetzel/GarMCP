@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
+import { GarminClient } from '../client/index.js';
 import {
   registerActivityTools,
   registerHealthTools,
@@ -14,7 +14,7 @@ import {
   registerWellnessTools,
   registerChallengeTools,
   registerWriteTools,
-} from '../tools';
+} from '../tools/index.js';
 
 const WRITE_TOOL_NAMES = new Set([
   'set_activity_name',
@@ -29,6 +29,7 @@ const WRITE_TOOL_NAMES = new Set([
 
 export type CreateGarminServerOptions = {
   enableWriteTools?: boolean;
+  client?: GarminClient;
 };
 
 function applyToolAnnotations(server: McpServer): void {
@@ -64,7 +65,7 @@ export function createGarminServer(
 
   applyToolAnnotations(server);
 
-  const client = new GarminClient(email, password);
+  const client = options?.client ?? new GarminClient(email, password);
 
   registerActivityTools(server, client);
   registerHealthTools(server, client);

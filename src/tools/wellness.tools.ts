@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
-import { dateParamSchema, getMenstrualCalendarSchema } from '../dtos';
+import { GarminClient } from '../client/index.js';
+import { dateParamSchema, getMenstrualCalendarSchema } from '../dtos/index.js';
 
 export function registerWellnessTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

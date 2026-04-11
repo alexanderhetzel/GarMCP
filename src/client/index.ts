@@ -1,3 +1,3 @@
-export { GarminClient } from './garmin.client';
-export { GarminAuth } from './garmin-auth';
-export type { RequestOptions } from './garmin-auth';
+export { GarminClient } from './garmin.client.js';
+export { GarminAuth } from './garmin-auth.js';
+export type { RequestOptions } from './garmin-auth.js';

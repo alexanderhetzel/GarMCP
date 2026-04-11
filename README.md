@@ -104,6 +104,16 @@ This repository now includes an HTTP MCP server for remote clients (Claude Web/M
   - `MCP_PORT` (fallback to `PORT`, default `8080`)
   - `MCP_PATH` (default `/mcp`)
   - `MCP_ALLOWED_ORIGINS` (comma-separated, example: `https://claude.ai`; required when requests include an `Origin` header)
+  - `MCP_API_KEY` (if set, `/mcp` requires `Authorization: Bearer <key>` or `x-api-key: <key>`; ignored when OAuth is enabled)
+  - `MCP_OAUTH_ENABLED` (default `false`; when `true`, `/mcp` requires OAuth Bearer tokens)
+  - `MCP_OAUTH_CLIENT_ID` (required if OAuth enabled)
+  - `MCP_OAUTH_CLIENT_SECRET` (required if OAuth enabled)
+  - `MCP_OAUTH_OWNER_USERNAME` (required if OAuth enabled; defaults to `GARMIN_EMAIL`)
+  - `MCP_OAUTH_OWNER_PASSWORD` (required if OAuth enabled)
+  - `MCP_OAUTH_SIGNING_SECRET` (required if OAuth enabled; long random string)
+  - `MCP_OAUTH_REDIRECT_URIS` (optional comma-separated allowlist)
+  - `MCP_OAUTH_DEFAULT_SCOPES` (default `mcp:read`)
+  - `MCP_OAUTH_ALLOW_API_KEY_FALLBACK` (default `true`; when OAuth is enabled, still allow `MCP_API_KEY` for tools like MCP Inspector)
   - `MCP_ENABLE_WRITE_TOOLS` (default `false`)
   - `GARMIN_MAX_CONCURRENT_REQUESTS` (default `4`; set `<=0` to disable)
 
@@ -111,6 +121,64 @@ This repository now includes an HTTP MCP server for remote clients (Claude Web/M
 
 - HTTP (cloud): `npm start` or `npm run start:http`
 - stdio (local MCP clients): `npm run start:stdio`
+
+## Vercel Deployment
+
+This repository includes Vercel serverless handlers:
+
+- `api/mcp.ts` (rewritten to `/mcp`)
+- `api/health.ts` (rewritten to `/health`)
+
+### Deploy
+
+```bash
+vercel
+```
+
+### Required Vercel Environment Variables
+
+- `GARMIN_EMAIL`
+- `GARMIN_PASSWORD`
+
+### Recommended Vercel Environment Variables
+
+- `MCP_ALLOWED_ORIGINS=https://claude.ai`
+- `MCP_ENABLE_WRITE_TOOLS=false`
+- `GARMIN_MAX_CONCURRENT_REQUESTS=1`
+- `GARMIN_TOKEN_DIR=/tmp/garmin-mcp` (note: Vercel filesystem is ephemeral)
+
+For long-lived token persistence on Vercel, use external storage or periodically re-seed tokens, because `/tmp` is not durable across cold starts/redeploys.
+
+### Endpoints on Vercel
+
+- `https://<your-domain>/health`
+- `https://<your-domain>/mcp`
+- `https://<your-domain>/.well-known/oauth-authorization-server`
+- `https://<your-domain>/.well-known/oauth-protected-resource/mcp`
+- `https://<your-domain>/authorize`
+- `https://<your-domain>/token`
+
+## Claude Connector with OAuth
+
+Set these Vercel environment variables:
+
+- `MCP_OAUTH_ENABLED=true`
+- `MCP_OAUTH_CLIENT_ID=<your-client-id>`
+- `MCP_OAUTH_CLIENT_SECRET=<your-client-secret>`
+- `MCP_OAUTH_OWNER_USERNAME=<your-login-username>`
+- `MCP_OAUTH_OWNER_PASSWORD=<your-login-password>`
+- `MCP_OAUTH_SIGNING_SECRET=<long-random-secret>`
+
+Then in Claude custom connector:
+
+- URL: `https://<your-domain>/mcp`
+- OAuth Client ID: same as `MCP_OAUTH_CLIENT_ID`
+- OAuth Client Secret: same as `MCP_OAUTH_CLIENT_SECRET`
+
+If you prefer non-OAuth protection for non-Claude clients, set `MCP_API_KEY` and include one of these headers:
+
+- `Authorization: Bearer <MCP_API_KEY>`
+- `x-api-key: <MCP_API_KEY>`
 
 ## Available Tools
 

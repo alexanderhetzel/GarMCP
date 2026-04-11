@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
-import { dateRangeParamSchema, weeklyParamSchema } from '../dtos';
+import { GarminClient } from '../client/index.js';
+import { dateRangeParamSchema, weeklyParamSchema } from '../dtos/index.js';
 
 export function registerTrendTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

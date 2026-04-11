@@ -1,12 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
+import { GarminClient } from '../client/index.js';
 import {
   getActivitiesSchema,
   getActivitiesByDateSchema,
   getActivitySchema,
   getProgressSummarySchema,
-} from '../dtos';
-import { DEFAULT_ACTIVITIES_LIMIT } from '../constants/garmin-endpoints';
+} from '../dtos/index.js';
+import { DEFAULT_ACTIVITIES_LIMIT } from '../constants/garmin-endpoints.js';
 
 export function registerActivityTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

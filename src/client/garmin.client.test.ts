@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import dotenv from 'dotenv';
-import { GarminClient } from './garmin.client';
+import { GarminClient } from './garmin.client.js';
 
 dotenv.config();
 

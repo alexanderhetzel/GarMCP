@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
-import { getTrainingPlanSchema, getScheduledWorkoutSchema } from '../dtos';
+import { GarminClient } from '../client/index.js';
+import { getTrainingPlanSchema, getScheduledWorkoutSchema } from '../dtos/index.js';
 
 export function registerTrainingTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

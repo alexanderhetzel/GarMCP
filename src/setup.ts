@@ -1,5 +1,5 @@
 import readline from 'node:readline';
-import { GarminAuth } from './client';
+import { GarminAuth } from './client/index.js';
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
 

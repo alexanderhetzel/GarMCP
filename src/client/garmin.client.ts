@@ -1,4 +1,4 @@
-import { GarminAuth, type RequestOptions } from './garmin-auth';
+import { GarminAuth, type RequestOptions } from './garmin-auth.js';
 import {
   USER_SUMMARY_ENDPOINT,
   HEART_RATE_ENDPOINT,
@@ -93,7 +93,7 @@ import {
   GEAR_UNLINK_ENDPOINT,
   DAILY_STEPS_MAX_RANGE_DAYS,
   BIOMETRIC_STATS_ENDPOINT,
-} from '../constants/garmin-endpoints';
+} from '../constants/garmin-endpoints.js';
 
 function todayString(): string {
   return new Date().toISOString().split('T')[0]!;

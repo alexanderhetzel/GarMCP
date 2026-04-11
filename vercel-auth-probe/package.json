@@ -1,0 +1,8 @@
+{
+  "name": "garmin-vercel-auth-probe",
+  "private": true,
+  "dependencies": {
+    "@vercel/node": "^5.3.24",
+    "oauth-1.0a": "^2.2.6"
+  }
+}

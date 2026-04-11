@@ -1,2 +1,2 @@
-export * from './garmin-endpoints';
-export * from './validations';
+export * from './garmin-endpoints.js';
+export * from './validations.js';

@@ -1,11 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
+import { GarminClient } from '../client/index.js';
 import {
   dateParamSchema,
   getRacePredictionsSchema,
   getLactateThresholdSchema,
   getScoreSchema,
-} from '../dtos';
+} from '../dtos/index.js';
 
 export function registerPerformanceTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

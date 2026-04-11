@@ -1,5 +1,5 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createGarminServer } from './server';
+import { createGarminServer } from './server/index.js';
 
 const GARMIN_EMAIL = process.env.GARMIN_EMAIL;
 const GARMIN_PASSWORD = process.env.GARMIN_PASSWORD;

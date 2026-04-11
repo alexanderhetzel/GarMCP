@@ -1,0 +1,38 @@
+{
+  "functions": {
+    "api/*.ts": {
+      "runtime": "@vercel/node@5.3.24",
+      "maxDuration": 300
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/oauth-authorization-server"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/mcp",
+      "destination": "/api/oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/mcp/",
+      "destination": "/api/oauth-protected-resource"
+    },
+    {
+      "source": "/authorize",
+      "destination": "/api/authorize"
+    },
+    {
+      "source": "/token",
+      "destination": "/api/token"
+    },
+    {
+      "source": "/mcp",
+      "destination": "/api/mcp"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    }
+  ]
+}

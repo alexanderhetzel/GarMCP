@@ -1,1 +1,1 @@
-export { createGarminServer, type CreateGarminServerOptions } from './create-garmin-server';
+export { createGarminServer, type CreateGarminServerOptions } from './create-garmin-server.js';

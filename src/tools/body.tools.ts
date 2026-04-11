@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
-import { dateParamSchema, dateRangeParamSchema } from '../dtos';
+import { GarminClient } from '../client/index.js';
+import { dateParamSchema, dateRangeParamSchema } from '../dtos/index.js';
 
 export function registerBodyTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

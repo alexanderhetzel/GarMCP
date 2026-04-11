@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { GarminClient } from '../client';
+import { GarminClient } from '../client/index.js';
 import {
   setActivityNameSchema,
   createManualActivitySchema,
@@ -8,7 +8,7 @@ import {
   setHydrationSchema,
   setBloodPressureSchema,
   gearActivitySchema,
-} from '../dtos';
+} from '../dtos/index.js';
 
 export function registerWriteTools(server: McpServer, client: GarminClient): void {
   server.registerTool(

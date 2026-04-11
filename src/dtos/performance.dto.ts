@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { dateString } from '../constants';
+import { dateString } from '../constants/index.js';
 
 export type GetRacePredictionsDto = {
   startDate?: string;

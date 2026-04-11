@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createGarminServer } from './server';
+import { createGarminServer } from './server/index.js';
+import { GarminClient } from './client/index.js';
 
 type SessionContext = {
   server: McpServer;
@@ -23,6 +24,7 @@ if (!GARMIN_EMAIL || !GARMIN_PASSWORD) {
 }
 
 const ENABLE_WRITE_TOOLS = (process.env.MCP_ENABLE_WRITE_TOOLS ?? 'false').toLowerCase() === 'true';
+const MCP_API_KEY = process.env.MCP_API_KEY?.trim();
 const RAW_ALLOWED_ORIGINS = (process.env.MCP_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -31,6 +33,14 @@ const MCP_PATH = normalizePath(process.env.MCP_PATH ?? '/mcp');
 const PORT = parsePort(process.env.MCP_PORT ?? process.env.PORT ?? '8080');
 
 const sessions = new Map<string, SessionContext>();
+let sharedGarminClient: GarminClient | undefined;
+
+function getSharedGarminClient(): GarminClient {
+  if (!sharedGarminClient) {
+    sharedGarminClient = new GarminClient(GARMIN_EMAIL!, GARMIN_PASSWORD!);
+  }
+  return sharedGarminClient;
+}
 
 function parsePort(raw: string): number {
   const parsed = Number.parseInt(raw, 10);
@@ -88,7 +98,7 @@ function applyCors(req: IncomingMessage, res: ServerResponse): boolean {
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,MCP-Session-Id,Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,MCP-Session-Id,Authorization,X-API-Key');
   return true;
 }
 
@@ -97,6 +107,24 @@ function getSessionId(req: IncomingMessage): string | undefined {
   if (typeof header === 'string' && header.trim()) return header.trim();
   if (Array.isArray(header) && header[0]?.trim()) return header[0].trim();
   return undefined;
+}
+
+function getApiKeyFromHeaders(req: IncomingMessage): string | undefined {
+  const xApiKey = req.headers['x-api-key'];
+  if (typeof xApiKey === 'string' && xApiKey.trim()) return xApiKey.trim();
+  if (Array.isArray(xApiKey) && xApiKey[0]?.trim()) return xApiKey[0].trim();
+
+  const authHeader = req.headers.authorization;
+  const rawAuth = typeof authHeader === 'string' ? authHeader : authHeader?.[0];
+  if (!rawAuth) return undefined;
+  const match = /^\s*Bearer\s+(.+?)\s*$/i.exec(rawAuth);
+  return match?.[1]?.trim();
+}
+
+function isAuthorized(req: IncomingMessage): boolean {
+  if (!MCP_API_KEY) return true;
+  const provided = getApiKeyFromHeaders(req);
+  return !!provided && provided === MCP_API_KEY;
 }
 
 async function parseJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -116,6 +144,7 @@ async function parseJsonBody(req: IncomingMessage): Promise<unknown> {
 async function createStatefulTransport(): Promise<StreamableHTTPServerTransport> {
   const server = createGarminServer(GARMIN_EMAIL!, GARMIN_PASSWORD!, {
     enableWriteTools: ENABLE_WRITE_TOOLS,
+    client: getSharedGarminClient(),
   });
 
   let initializedSessionId: string | undefined;
@@ -215,6 +244,12 @@ const httpServer = createServer(async (req, res) => {
     return;
   }
 
+  if (!isAuthorized(req)) {
+    res.setHeader('WWW-Authenticate', 'Bearer realm="garmin-mcp"');
+    writeJson(res, 401, { error: 'Unauthorized' });
+    return;
+  }
+
   const path = getRequestPath(req);
 
   if (path === '/health' && (req.method ?? 'GET').toUpperCase() === 'GET') {
@@ -249,4 +284,5 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.error(`MCP endpoint: ${MCP_PATH}`);
   console.error(`Health endpoint: /health`);
   console.error(`Write tools enabled: ${ENABLE_WRITE_TOOLS}`);
+  console.error(`API key protection enabled: ${Boolean(MCP_API_KEY)}`);
 });
