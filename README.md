@@ -97,10 +97,12 @@ This repository now includes an HTTP MCP server for remote clients (Claude Web/M
 ### Environment variables
 
 - Required:
-  - `GARMIN_EMAIL`
-  - `GARMIN_PASSWORD`
+  - `GARMIN_EMAIL` and `GARMIN_PASSWORD` for non-OAuth mode (or as fallback when OAuth session tokens are missing)
 - Optional:
   - `GARMIN_TOKEN_DIR` (default: `~/.garmin-mcp`; use an absolute path for `.env` files, e.g. `/Users/your-user/.garmin-mcp`)
+  - `GARMIN_TOKEN_STORE` (`filesystem` default, or `vercel-kv` for persistent shared storage on Vercel)
+  - `KV_REST_API_URL` (required when `GARMIN_TOKEN_STORE=vercel-kv`)
+  - `KV_REST_API_TOKEN` (required when `GARMIN_TOKEN_STORE=vercel-kv`)
   - `MCP_PORT` (fallback to `PORT`, default `8080`)
   - `MCP_PATH` (default `/mcp`)
   - `MCP_ALLOWED_ORIGINS` (comma-separated, example: `https://claude.ai`; required when requests include an `Origin` header)
@@ -108,8 +110,8 @@ This repository now includes an HTTP MCP server for remote clients (Claude Web/M
   - `MCP_OAUTH_ENABLED` (default `false`; when `true`, `/mcp` requires OAuth Bearer tokens)
   - `MCP_OAUTH_CLIENT_ID` (required if OAuth enabled)
   - `MCP_OAUTH_CLIENT_SECRET` (required if OAuth enabled)
-  - `MCP_OAUTH_OWNER_USERNAME` (required if OAuth enabled; defaults to `GARMIN_EMAIL`)
-  - `MCP_OAUTH_OWNER_PASSWORD` (required if OAuth enabled)
+  - `MCP_OAUTH_OWNER_USERNAME` (optional legacy subject override; defaults to `GARMIN_EMAIL`)
+  - `MCP_OAUTH_OWNER_PASSWORD` (legacy; not required in Garmin-login authorize flow)
   - `MCP_OAUTH_SIGNING_SECRET` (required if OAuth enabled; long random string)
   - `MCP_OAUTH_REDIRECT_URIS` (optional comma-separated allowlist)
   - `MCP_OAUTH_DEFAULT_SCOPES` (default `mcp:read`)
@@ -137,8 +139,10 @@ vercel
 
 ### Required Vercel Environment Variables
 
-- `GARMIN_EMAIL`
-- `GARMIN_PASSWORD`
+- `MCP_OAUTH_ENABLED=true`
+- `MCP_OAUTH_CLIENT_ID`
+- `MCP_OAUTH_CLIENT_SECRET`
+- `MCP_OAUTH_SIGNING_SECRET`
 
 ### Recommended Vercel Environment Variables
 
@@ -146,8 +150,10 @@ vercel
 - `MCP_ENABLE_WRITE_TOOLS=false`
 - `GARMIN_MAX_CONCURRENT_REQUESTS=1`
 - `GARMIN_TOKEN_DIR=/tmp/garmin-mcp` (note: Vercel filesystem is ephemeral)
-
-For long-lived token persistence on Vercel, use external storage or periodically re-seed tokens, because `/tmp` is not durable across cold starts/redeploys.
+- `GARMIN_TOKEN_STORE=vercel-kv`
+- `KV_REST_API_URL=<from Vercel KV>`
+- `KV_REST_API_TOKEN=<from Vercel KV>`
+- Optional fallback: `GARMIN_EMAIL` and `GARMIN_PASSWORD`
 
 ### Endpoints on Vercel
 
@@ -165,8 +171,6 @@ Set these Vercel environment variables:
 - `MCP_OAUTH_ENABLED=true`
 - `MCP_OAUTH_CLIENT_ID=<your-client-id>`
 - `MCP_OAUTH_CLIENT_SECRET=<your-client-secret>`
-- `MCP_OAUTH_OWNER_USERNAME=<your-login-username>`
-- `MCP_OAUTH_OWNER_PASSWORD=<your-login-password>`
 - `MCP_OAUTH_SIGNING_SECRET=<long-random-secret>`
 
 Then in Claude custom connector:

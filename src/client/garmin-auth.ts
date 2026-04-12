@@ -45,6 +45,28 @@ const MAX_CONCURRENT_REQUESTS = Number.parseInt(
   process.env.GARMIN_MAX_CONCURRENT_REQUESTS ?? String(DEFAULT_MAX_CONCURRENT_REQUESTS),
   10,
 );
+const DEFAULT_TOKEN_STORE_MODE = 'filesystem';
+
+type TokenStoreMode = 'filesystem' | 'vercel-kv';
+
+type VercelKvResponse<T> = {
+  result: T;
+  error?: string;
+};
+
+function resolveTokenStoreMode(): TokenStoreMode {
+  const raw = (process.env.GARMIN_TOKEN_STORE ?? DEFAULT_TOKEN_STORE_MODE).trim().toLowerCase();
+  if (raw === 'vercel-kv' || raw === 'kv') return 'vercel-kv';
+  return 'filesystem';
+}
+
+function tokenNamespaceFromDir(tokenDir: string): string {
+  const normalized = tokenDir.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+  const tail = parts[parts.length - 1];
+  if (tail && /^[a-f0-9]{16,}$/i.test(tail)) return tail.toLowerCase();
+  return crypto.createHash('sha256').update(tokenDir).digest('hex').slice(0, 32);
+}
 
 let activeRequestCount = 0;
 const requestWaitQueue: Array<() => void> = [];
@@ -119,9 +141,16 @@ export class GarminAuth {
   private oauth2Token: OAuth2Token | null = null;
   private profile: UserProfile | null = null;
   private isAuthenticated = false;
+  private authInFlight: Promise<void> | null = null;
+  private tokenLoadInFlight: Promise<void> | null = null;
+  private tokensLoaded = false;
   private promptMfa?: () => Promise<string>;
   private readonly tokenDir: string;
   private readonly persistTokens: boolean;
+  private readonly tokenStoreMode: TokenStoreMode;
+  private readonly tokenNamespace: string;
+  private readonly kvUrl?: string;
+  private readonly kvToken?: string;
 
   get displayName(): string {
     return this.profile?.displayName ?? '';
@@ -142,7 +171,19 @@ export class GarminAuth {
     this.promptMfa = promptMfa;
     this.tokenDir = resolveGarminTokenDir(options?.tokenDir ?? process.env.GARMIN_TOKEN_DIR?.trim());
     this.persistTokens = options?.persistTokens ?? true;
-    this.loadTokens();
+    this.tokenStoreMode = resolveTokenStoreMode();
+    this.tokenNamespace = tokenNamespaceFromDir(this.tokenDir);
+    this.kvUrl = process.env.KV_REST_API_URL?.trim();
+    this.kvToken = process.env.KV_REST_API_TOKEN?.trim();
+
+    if (this.tokenStoreMode === 'filesystem') {
+      this.loadTokensFromFilesystem();
+      this.tokensLoaded = true;
+    }
+  }
+
+  async prepare(): Promise<void> {
+    await this.ensureAuthenticated();
   }
 
   async request<T>(endpoint: string, options?: RequestOptions): Promise<T> {
@@ -195,48 +236,80 @@ export class GarminAuth {
 
   private async ensureAuthenticated(): Promise<void> {
     if (this.isAuthenticated && this.oauth2Token && !this.isOAuth2Expired() && this.profile) return;
+    await this.ensureTokensLoaded();
+    await this.withAuthInFlight(async () => {
+      if (this.isAuthenticated && this.oauth2Token && !this.isOAuth2Expired() && this.profile) return;
 
-    if (this.oauth1Token && this.oauth2Token && !this.isOAuth2Expired() && this.profile) {
+      if (this.oauth1Token && this.oauth2Token && !this.isOAuth2Expired() && this.profile) {
+        this.isAuthenticated = true;
+        return;
+      }
+
+      if (this.oauth1Token && this.oauth2Token && !this.isOAuth2Expired() && !this.profile) {
+        await this.fetchProfile();
+        await this.saveTokens();
+        this.isAuthenticated = true;
+        return;
+      }
+
+      if (this.oauth1Token) {
+        await this.exchangeOAuth1ForOAuth2();
+        await this.fetchProfile();
+        await this.saveTokens();
+        this.isAuthenticated = true;
+        return;
+      }
+
+      if (!this.email || !this.password) {
+        throw new Error('Garmin re-authorization required: no stored Garmin tokens and no credentials available');
+      }
+
+      await this.login();
       this.isAuthenticated = true;
-      return;
-    }
-
-    if (this.oauth1Token && this.oauth2Token && !this.isOAuth2Expired() && !this.profile) {
-      await this.fetchProfile();
-      this.saveTokens();
-      this.isAuthenticated = true;
-      return;
-    }
-
-    if (this.oauth1Token) {
-      await this.exchangeOAuth1ForOAuth2();
-      await this.fetchProfile();
-      this.saveTokens();
-      this.isAuthenticated = true;
-      return;
-    }
-
-    await this.login();
-    this.isAuthenticated = true;
+    });
   }
 
   private async refreshOrRelogin(): Promise<void> {
-    this.isAuthenticated = false;
+    await this.ensureTokensLoaded();
+    await this.withAuthInFlight(async () => {
+      this.isAuthenticated = false;
 
-    if (this.oauth1Token) {
-      try {
-        await this.exchangeOAuth1ForOAuth2();
-        if (!this.profile) await this.fetchProfile();
-        this.saveTokens();
-        this.isAuthenticated = true;
-        return;
-      } catch (error) {
-        console.error('OAuth2 refresh failed, will re-login:', error);
+      if (this.oauth1Token) {
+        try {
+          await this.exchangeOAuth1ForOAuth2();
+          if (!this.profile) await this.fetchProfile();
+          await this.saveTokens();
+          this.isAuthenticated = true;
+          return;
+        } catch (error) {
+          console.error('OAuth2 refresh failed, will re-login:', error);
+        }
       }
+
+      if (!this.email || !this.password) {
+        throw new Error('Garmin re-authorization required: stored Garmin tokens are invalid and no credentials are available');
+      }
+
+      await this.login();
+      this.isAuthenticated = true;
+    });
+  }
+
+  private async withAuthInFlight(task: () => Promise<void>): Promise<void> {
+    if (this.authInFlight) {
+      await this.authInFlight;
+      return;
     }
 
-    await this.login();
-    this.isAuthenticated = true;
+    const inFlight = task();
+    this.authInFlight = inFlight;
+    try {
+      await inFlight;
+    } finally {
+      if (this.authInFlight === inFlight) {
+        this.authInFlight = null;
+      }
+    }
   }
 
   private async login(): Promise<void> {
@@ -247,7 +320,7 @@ export class GarminAuth {
     await this.exchangeTicketForOAuth1(ticket);
     await this.exchangeOAuth1ForOAuth2();
     await this.fetchProfile();
-    this.saveTokens();
+    await this.saveTokens();
 
     console.error('Authentication successful');
   }
@@ -458,7 +531,34 @@ export class GarminAuth {
     return this.oauth2Token.expires_at < Math.floor(Date.now() / 1000) + TOKEN_EXPIRY_BUFFER_SECONDS;
   }
 
-  private loadTokens(): void {
+  private async ensureTokensLoaded(): Promise<void> {
+    if (!this.persistTokens || this.tokensLoaded) return;
+
+    if (this.tokenLoadInFlight) {
+      await this.tokenLoadInFlight;
+      return;
+    }
+
+    const inFlight = (async () => {
+      if (this.tokenStoreMode === 'vercel-kv') {
+        await this.loadTokensFromVercelKv();
+      } else {
+        this.loadTokensFromFilesystem();
+      }
+      this.tokensLoaded = true;
+    })();
+
+    this.tokenLoadInFlight = inFlight;
+    try {
+      await inFlight;
+    } finally {
+      if (this.tokenLoadInFlight === inFlight) {
+        this.tokenLoadInFlight = null;
+      }
+    }
+  }
+
+  private loadTokensFromFilesystem(): void {
     if (!this.persistTokens) return;
     try {
       const oauth1Path = path.join(this.tokenDir, OAUTH1_TOKEN_FILE);
@@ -481,7 +581,16 @@ export class GarminAuth {
     }
   }
 
-  private saveTokens(): void {
+  private async saveTokens(): Promise<void> {
+    if (!this.persistTokens) return;
+    if (this.tokenStoreMode === 'vercel-kv') {
+      await this.saveTokensToVercelKv();
+      return;
+    }
+    this.saveTokensToFilesystem();
+  }
+
+  private saveTokensToFilesystem(): void {
     if (!this.persistTokens) return;
 
     if (!fs.existsSync(this.tokenDir)) {
@@ -509,5 +618,83 @@ export class GarminAuth {
         { mode: 0o600 },
       );
     }
+  }
+
+  private async loadTokensFromVercelKv(): Promise<void> {
+    if (!this.kvUrl || !this.kvToken) {
+      console.error(
+        'GARMIN_TOKEN_STORE=vercel-kv is set, but KV_REST_API_URL or KV_REST_API_TOKEN is missing. Falling back to empty token cache.',
+      );
+      this.oauth1Token = null;
+      this.oauth2Token = null;
+      this.profile = null;
+      return;
+    }
+
+    try {
+      const oauth1Raw = await this.kvGet(`${this.tokenNamespace}:${OAUTH1_TOKEN_FILE}`);
+      const oauth2Raw = await this.kvGet(`${this.tokenNamespace}:${OAUTH2_TOKEN_FILE}`);
+      const profileRaw = await this.kvGet(`${this.tokenNamespace}:${PROFILE_FILE}`);
+
+      this.oauth1Token = oauth1Raw ? JSON.parse(oauth1Raw) : null;
+      this.oauth2Token = oauth2Raw ? JSON.parse(oauth2Raw) : null;
+      this.profile = profileRaw ? JSON.parse(profileRaw) : null;
+    } catch (error) {
+      console.error('Failed to load Garmin tokens from Vercel KV', error);
+      this.oauth1Token = null;
+      this.oauth2Token = null;
+      this.profile = null;
+    }
+  }
+
+  private async saveTokensToVercelKv(): Promise<void> {
+    if (!this.kvUrl || !this.kvToken) {
+      throw new Error('GARMIN_TOKEN_STORE is set to vercel-kv, but KV_REST_API_URL/KV_REST_API_TOKEN are missing');
+    }
+
+    const writes: Array<Promise<unknown>> = [];
+    if (this.oauth1Token) {
+      writes.push(this.kvSet(`${this.tokenNamespace}:${OAUTH1_TOKEN_FILE}`, JSON.stringify(this.oauth1Token)));
+    }
+    if (this.oauth2Token) {
+      writes.push(this.kvSet(`${this.tokenNamespace}:${OAUTH2_TOKEN_FILE}`, JSON.stringify(this.oauth2Token)));
+    }
+    if (this.profile) {
+      writes.push(this.kvSet(`${this.tokenNamespace}:${PROFILE_FILE}`, JSON.stringify(this.profile)));
+    }
+    await Promise.all(writes);
+  }
+
+  private async kvGet(key: string): Promise<string | null> {
+    const result = await this.kvCommand<string | null>(['GET', key]);
+    if (result === undefined || result === null) return null;
+    return String(result);
+  }
+
+  private async kvSet(key: string, value: string): Promise<void> {
+    await this.kvCommand(['SET', key, value]);
+  }
+
+  private async kvCommand<T = unknown>(command: string[]): Promise<T> {
+    const response = await fetch(this.kvUrl!, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.kvToken!}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(command),
+    });
+
+    if (!response.ok) {
+      const snippet = await response.text();
+      throw new Error(`Vercel KV request failed (${response.status}): ${snippet.slice(0, 200)}`);
+    }
+
+    const payload = await response.json() as VercelKvResponse<T>;
+    if (payload.error) {
+      throw new Error(`Vercel KV error: ${payload.error}`);
+    }
+
+    return payload.result;
   }
 }

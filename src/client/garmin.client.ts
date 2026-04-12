@@ -111,6 +111,10 @@ export class GarminClient {
     this.auth = new GarminAuth(email, password, promptMfa, options);
   }
 
+  async prepare(): Promise<void> {
+    await this.auth.prepare();
+  }
+
   private request<T>(endpoint: string, options?: RequestOptions): Promise<T> {
     return this.auth.request<T>(endpoint, options);
   }

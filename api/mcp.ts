@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -36,6 +38,7 @@ const oauthConfig = getOAuthConfigFromEnv();
 const oauthEnabled = isOAuthEnabled(oauthConfig);
 const oauthConfigErrors = validateOAuthConfig(oauthConfig);
 const enableWriteTools = (process.env.MCP_ENABLE_WRITE_TOOLS ?? 'false').toLowerCase() === 'true';
+const tokenStoreMode = (process.env.GARMIN_TOKEN_STORE ?? 'filesystem').trim().toLowerCase();
 const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -43,6 +46,12 @@ const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? '')
 
 const sessions = new Map<string, SessionContext>();
 let sharedGarminClient: GarminClient | undefined;
+
+function hasStoredGarminTokens(tokenDir: string): boolean {
+  const oauth1Path = path.join(tokenDir, 'oauth1_token.json');
+  const oauth2Path = path.join(tokenDir, 'oauth2_token.json');
+  return fs.existsSync(oauth1Path) && fs.existsSync(oauth2Path);
+}
 
 function getSharedGarminClient(): GarminClient {
   if (!sharedGarminClient) {
@@ -163,8 +172,9 @@ async function createStatefulTransport(authContext: RequestAuthContext): Promise
   const isOauthSession = authContext.kind === 'oauth';
   const hasUserTokenDir = isOauthSession && !!authContext.garminTokenDir;
   const client = hasUserTokenDir
-    ? new GarminClient('', '', undefined, { tokenDir: authContext.garminTokenDir })
+    ? new GarminClient(garminEmail ?? '', garminPassword ?? '', undefined, { tokenDir: authContext.garminTokenDir })
     : getSharedGarminClient();
+  await client.prepare();
 
   const server = createGarminServer(garminEmail ?? '', garminPassword ?? '', {
     enableWriteTools,
@@ -247,6 +257,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   if (authContext.kind === 'oauth' && !authContext.garminTokenDir) {
     writeJson(res, 401, {
       error: 'Missing Garmin session context. Re-authorize this connector to continue.',
+    });
+    return;
+  }
+
+  if (
+    authContext.kind === 'oauth' &&
+    authContext.garminTokenDir &&
+    tokenStoreMode !== 'vercel-kv' &&
+    tokenStoreMode !== 'kv' &&
+    !hasStoredGarminTokens(authContext.garminTokenDir) &&
+    (!garminEmail || !garminPassword)
+  ) {
+    writeJson(res, 401, {
+      error:
+        'Garmin re-authorization required: no stored Garmin tokens available in this runtime and no GARMIN_EMAIL/GARMIN_PASSWORD fallback configured.',
+      hint:
+        'On Vercel, /authorize and /mcp run as stateless functions. Set GARMIN_EMAIL and GARMIN_PASSWORD as fallback or use shared persistent token storage.',
     });
     return;
   }

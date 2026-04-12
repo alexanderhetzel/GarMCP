@@ -152,9 +152,11 @@ async function parseJsonBody(req: IncomingMessage): Promise<unknown> {
 }
 
 async function createStatefulTransport(): Promise<StreamableHTTPServerTransport> {
+  const client = getSharedGarminClient();
+  await client.prepare();
   const server = createGarminServer(GARMIN_EMAIL!, GARMIN_PASSWORD!, {
     enableWriteTools: ENABLE_WRITE_TOOLS,
-    client: getSharedGarminClient(),
+    client,
   });
 
   let initializedSessionId: string | undefined;
