@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -31,9 +33,17 @@ const RAW_ALLOWED_ORIGINS = (process.env.MCP_ALLOWED_ORIGINS ?? '')
   .filter(Boolean);
 const MCP_PATH = normalizePath(process.env.MCP_PATH ?? '/mcp');
 const PORT = parsePort(process.env.MCP_PORT ?? process.env.PORT ?? '8080');
+const FAVICON_PNG_PATH = resolve(process.cwd(), 'public/favicon.png');
 
 const sessions = new Map<string, SessionContext>();
 let sharedGarminClient: GarminClient | undefined;
+let faviconPng: Buffer | undefined;
+
+try {
+  faviconPng = readFileSync(FAVICON_PNG_PATH);
+} catch {
+  // Optional asset; server continues without favicon if file is absent.
+}
 
 function getSharedGarminClient(): GarminClient {
   if (!sharedGarminClient) {
@@ -244,13 +254,26 @@ const httpServer = createServer(async (req, res) => {
     return;
   }
 
+  const method = (req.method ?? 'GET').toUpperCase();
+  const path = getRequestPath(req);
+
+  if ((path === '/favicon.ico' || path === '/favicon.png') && method === 'GET') {
+    if (!faviconPng) {
+      writeJson(res, 404, { error: 'Favicon not found' });
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.end(faviconPng);
+    return;
+  }
+
   if (!isAuthorized(req)) {
     res.setHeader('WWW-Authenticate', 'Bearer realm="garmin-mcp"');
     writeJson(res, 401, { error: 'Unauthorized' });
     return;
   }
-
-  const path = getRequestPath(req);
 
   if (path === '/health' && (req.method ?? 'GET').toUpperCase() === 'GET') {
     writeJson(res, 200, {
