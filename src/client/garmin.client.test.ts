@@ -179,8 +179,8 @@ describe('GarminClient (live API)', () => {
       expect(data).toBeDefined();
     }, 30000);
 
-    it('get_steps', async () => {
-      const data = await client.getSteps(yesterday());
+    it('get_daily_steps (single day range)', async () => {
+      const data = await client.getDailySteps(yesterday(), yesterday());
       expect(data).toBeDefined();
     }, 30000);
 
@@ -306,8 +306,8 @@ describe('GarminClient (live API)', () => {
       expect(data).toBeDefined();
     }, 30000);
 
-    it('get_latest_weight', async () => {
-      const data = await client.getLatestWeight();
+    it('get_latest_weight replacement (daily weigh-ins)', async () => {
+      const data = await client.getDailyWeighIns(yesterday());
       expect(data).toBeDefined();
     }, 30000);
 

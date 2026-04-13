@@ -13,6 +13,8 @@
   ],
   "scripts": {
     "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build",
     "watch": "tsup --watch",
     "start": "node build/http-server.js",
     "start:stdio": "node build/index.js",

@@ -28,6 +28,8 @@ type RequestAuthContext =
   | { kind: 'api-key' }
   | { kind: 'none' };
 
+type TokenStoreMode = 'filesystem' | 'redis-rest';
+
 const garminEmail = process.env.GARMIN_EMAIL;
 const garminPassword = process.env.GARMIN_PASSWORD;
 const mcpApiKey = process.env.MCP_API_KEY?.trim();
@@ -38,7 +40,24 @@ const oauthConfig = getOAuthConfigFromEnv();
 const oauthEnabled = isOAuthEnabled(oauthConfig);
 const oauthConfigErrors = validateOAuthConfig(oauthConfig);
 const enableWriteTools = (process.env.MCP_ENABLE_WRITE_TOOLS ?? 'false').toLowerCase() === 'true';
-const tokenStoreMode = (process.env.GARMIN_TOKEN_STORE ?? 'filesystem').trim().toLowerCase();
+const REAUTH_REQUIRED_NO_TOKENS = 'Garmin re-authorization required: no stored Garmin tokens and no credentials available';
+
+function resolveTokenStoreMode(): TokenStoreMode {
+  const raw = (process.env.GARMIN_TOKEN_STORE ?? 'filesystem').trim().toLowerCase();
+  if (
+    raw === 'vercel-kv' ||
+    raw === 'kv' ||
+    raw === 'redis-rest' ||
+    raw === 'upstash' ||
+    raw === 'upstash-redis' ||
+    raw === 'upstash-redis-rest'
+  ) {
+    return 'redis-rest';
+  }
+  return 'filesystem';
+}
+
+const tokenStoreMode = resolveTokenStoreMode();
 const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -46,6 +65,7 @@ const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? '')
 
 const sessions = new Map<string, SessionContext>();
 let sharedGarminClient: GarminClient | undefined;
+const oauthUserGarminClients = new Map<string, GarminClient>();
 
 function hasStoredGarminTokens(tokenDir: string): boolean {
   const oauth1Path = path.join(tokenDir, 'oauth1_token.json');
@@ -58,6 +78,15 @@ function getSharedGarminClient(): GarminClient {
     sharedGarminClient = new GarminClient(garminEmail!, garminPassword!);
   }
   return sharedGarminClient;
+}
+
+function getOAuthUserGarminClient(tokenDir: string): GarminClient {
+  let client = oauthUserGarminClients.get(tokenDir);
+  if (!client) {
+    client = new GarminClient(garminEmail ?? '', garminPassword ?? '', undefined, { tokenDir });
+    oauthUserGarminClients.set(tokenDir, client);
+  }
+  return client;
 }
 
 function isOriginAllowed(origin: string): boolean {
@@ -172,9 +201,8 @@ async function createStatefulTransport(authContext: RequestAuthContext): Promise
   const isOauthSession = authContext.kind === 'oauth';
   const hasUserTokenDir = isOauthSession && !!authContext.garminTokenDir;
   const client = hasUserTokenDir
-    ? new GarminClient(garminEmail ?? '', garminPassword ?? '', undefined, { tokenDir: authContext.garminTokenDir })
+    ? getOAuthUserGarminClient(authContext.garminTokenDir)
     : getSharedGarminClient();
-  await client.prepare();
 
   const server = createGarminServer(garminEmail ?? '', garminPassword ?? '', {
     enableWriteTools,
@@ -264,16 +292,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   if (
     authContext.kind === 'oauth' &&
     authContext.garminTokenDir &&
-    tokenStoreMode !== 'vercel-kv' &&
-    tokenStoreMode !== 'kv' &&
+    tokenStoreMode === 'filesystem' &&
     !hasStoredGarminTokens(authContext.garminTokenDir) &&
     (!garminEmail || !garminPassword)
   ) {
     writeJson(res, 401, {
-      error:
-        'Garmin re-authorization required: no stored Garmin tokens available in this runtime and no GARMIN_EMAIL/GARMIN_PASSWORD fallback configured.',
+      error: `${REAUTH_REQUIRED_NO_TOKENS}.`,
       hint:
-        'On Vercel, /authorize and /mcp run as stateless functions. Set GARMIN_EMAIL and GARMIN_PASSWORD as fallback or use shared persistent token storage.',
+        'No local Garmin token cache was found for this runtime. Re-authorize, configure GARMIN_EMAIL/GARMIN_PASSWORD as fallback, or use GARMIN_TOKEN_STORE=vercel-kv (Upstash/Redis REST).',
     });
     return;
   }

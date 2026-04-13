@@ -47,16 +47,40 @@ const MAX_CONCURRENT_REQUESTS = Number.parseInt(
 );
 const DEFAULT_TOKEN_STORE_MODE = 'filesystem';
 
-type TokenStoreMode = 'filesystem' | 'vercel-kv';
+type TokenStoreMode = 'filesystem' | 'redis-rest';
 
-type VercelKvResponse<T> = {
+type RedisRestResponse<T> = {
   result: T;
   error?: string;
 };
 
+const REAUTH_REQUIRED_NO_TOKENS = 'Garmin re-authorization required: no stored Garmin tokens and no credentials available';
+const REAUTH_REQUIRED_INVALID_TOKENS =
+  'Garmin re-authorization required: stored Garmin tokens are invalid and no credentials available';
+const REDIS_REST_ENV_HINT =
+  'Set KV_REST_API_URL/KV_REST_API_TOKEN or UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN.';
+
+function firstDefinedEnv(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    if (value && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
 function resolveTokenStoreMode(): TokenStoreMode {
   const raw = (process.env.GARMIN_TOKEN_STORE ?? DEFAULT_TOKEN_STORE_MODE).trim().toLowerCase();
-  if (raw === 'vercel-kv' || raw === 'kv') return 'vercel-kv';
+  if (
+    raw === 'vercel-kv' ||
+    raw === 'kv' ||
+    raw === 'redis-rest' ||
+    raw === 'upstash' ||
+    raw === 'upstash-redis' ||
+    raw === 'upstash-redis-rest'
+  ) {
+    return 'redis-rest';
+  }
   return 'filesystem';
 }
 
@@ -173,8 +197,8 @@ export class GarminAuth {
     this.persistTokens = options?.persistTokens ?? true;
     this.tokenStoreMode = resolveTokenStoreMode();
     this.tokenNamespace = tokenNamespaceFromDir(this.tokenDir);
-    this.kvUrl = process.env.KV_REST_API_URL?.trim();
-    this.kvToken = process.env.KV_REST_API_TOKEN?.trim();
+    this.kvUrl = firstDefinedEnv(process.env.KV_REST_API_URL, process.env.UPSTASH_REDIS_REST_URL);
+    this.kvToken = firstDefinedEnv(process.env.KV_REST_API_TOKEN, process.env.UPSTASH_REDIS_REST_TOKEN);
 
     if (this.tokenStoreMode === 'filesystem') {
       this.loadTokensFromFilesystem();
@@ -260,9 +284,7 @@ export class GarminAuth {
         return;
       }
 
-      if (!this.email || !this.password) {
-        throw new Error('Garmin re-authorization required: no stored Garmin tokens and no credentials available');
-      }
+      if (!this.email || !this.password) throw new Error(REAUTH_REQUIRED_NO_TOKENS);
 
       await this.login();
       this.isAuthenticated = true;
@@ -286,9 +308,7 @@ export class GarminAuth {
         }
       }
 
-      if (!this.email || !this.password) {
-        throw new Error('Garmin re-authorization required: stored Garmin tokens are invalid and no credentials are available');
-      }
+      if (!this.email || !this.password) throw new Error(REAUTH_REQUIRED_INVALID_TOKENS);
 
       await this.login();
       this.isAuthenticated = true;
@@ -540,8 +560,8 @@ export class GarminAuth {
     }
 
     const inFlight = (async () => {
-      if (this.tokenStoreMode === 'vercel-kv') {
-        await this.loadTokensFromVercelKv();
+      if (this.tokenStoreMode === 'redis-rest') {
+        await this.loadTokensFromRedisRest();
       } else {
         this.loadTokensFromFilesystem();
       }
@@ -583,8 +603,8 @@ export class GarminAuth {
 
   private async saveTokens(): Promise<void> {
     if (!this.persistTokens) return;
-    if (this.tokenStoreMode === 'vercel-kv') {
-      await this.saveTokensToVercelKv();
+    if (this.tokenStoreMode === 'redis-rest') {
+      await this.saveTokensToRedisRest();
       return;
     }
     this.saveTokensToFilesystem();
@@ -620,11 +640,9 @@ export class GarminAuth {
     }
   }
 
-  private async loadTokensFromVercelKv(): Promise<void> {
+  private async loadTokensFromRedisRest(): Promise<void> {
     if (!this.kvUrl || !this.kvToken) {
-      console.error(
-        'GARMIN_TOKEN_STORE=vercel-kv is set, but KV_REST_API_URL or KV_REST_API_TOKEN is missing. Falling back to empty token cache.',
-      );
+      console.error(`GARMIN_TOKEN_STORE requires Redis REST credentials. ${REDIS_REST_ENV_HINT}`);
       this.oauth1Token = null;
       this.oauth2Token = null;
       this.profile = null;
@@ -640,16 +658,16 @@ export class GarminAuth {
       this.oauth2Token = oauth2Raw ? JSON.parse(oauth2Raw) : null;
       this.profile = profileRaw ? JSON.parse(profileRaw) : null;
     } catch (error) {
-      console.error('Failed to load Garmin tokens from Vercel KV', error);
+      console.error('Failed to load Garmin tokens from Redis REST storage', error);
       this.oauth1Token = null;
       this.oauth2Token = null;
       this.profile = null;
     }
   }
 
-  private async saveTokensToVercelKv(): Promise<void> {
+  private async saveTokensToRedisRest(): Promise<void> {
     if (!this.kvUrl || !this.kvToken) {
-      throw new Error('GARMIN_TOKEN_STORE is set to vercel-kv, but KV_REST_API_URL/KV_REST_API_TOKEN are missing');
+      throw new Error(`GARMIN_TOKEN_STORE requires Redis REST credentials. ${REDIS_REST_ENV_HINT}`);
     }
 
     const writes: Array<Promise<unknown>> = [];
@@ -687,12 +705,12 @@ export class GarminAuth {
 
     if (!response.ok) {
       const snippet = await response.text();
-      throw new Error(`Vercel KV request failed (${response.status}): ${snippet.slice(0, 200)}`);
+      throw new Error(`Redis REST token store request failed (${response.status}): ${snippet.slice(0, 200)}`);
     }
 
-    const payload = await response.json() as VercelKvResponse<T>;
+    const payload = await response.json() as RedisRestResponse<T>;
     if (payload.error) {
-      throw new Error(`Vercel KV error: ${payload.error}`);
+      throw new Error(`Redis REST token store error: ${payload.error}`);
     }
 
     return payload.result;
