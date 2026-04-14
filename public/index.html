@@ -3,8 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GarMCP</title>
-    <meta name="description" content="GarMCP remote MCP server endpoint" />
+    <title>GarMCP | Garmin Connect MCP for Claude</title>
+    <meta
+      name="description"
+      content="GarMCP is an unofficial Garmin Connect MCP server for Claude. Deploy in minutes on Vercel, connect Garmin, and query your training and health data with AI."
+    />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
@@ -13,11 +16,568 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#11a9ed" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg0: #02060a;
+        --bg1: #071019;
+        --panel: #0a1219;
+        --panel-2: #0d1720;
+        --line: #233342;
+        --line-soft: #1a2835;
+        --text: #eff6fd;
+        --muted: #8ea4b6;
+        --accent: #11a9ed;
+        --accent-2: #0a8ec9;
+        --ok: #49e3ab;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        color: var(--text);
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(1200px 700px at 100% -10%, rgba(17, 169, 237, 0.17), transparent 64%),
+          repeating-radial-gradient(circle at 92% -7%, rgba(109, 207, 246, 0.08) 0 1px, transparent 1px 24px),
+          linear-gradient(160deg, var(--bg0), var(--bg1));
+        overflow-x: hidden;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(22, 35, 48, 0.36) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(22, 35, 48, 0.28) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.32), transparent 75%);
+        animation: drift 18s linear infinite;
+      }
+      .wrap {
+        width: min(1100px, calc(100% - 28px));
+        margin: 0 auto;
+      }
+      main.wrap {
+        flex: 1 0 auto;
+      }
+      .topbar {
+        border-bottom: 1px solid var(--line-soft);
+        backdrop-filter: blur(8px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(5, 12, 18, 0.72);
+      }
+      .topbar-inner {
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .brand-lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand-lockup img {
+        width: 156px;
+        height: 52px;
+        object-fit: contain;
+      }
+      .badge {
+        border: 1px solid #2a3d4e;
+        background: #0f1821;
+        color: #b8cfe0;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 7px 10px;
+      }
+      .hero {
+        padding: 42px 0 26px;
+      }
+      .hero-grid {
+        display: grid;
+        gap: 20px;
+      }
+      .hero-shell {
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(13, 21, 29, 0.96), rgba(8, 14, 19, 0.96));
+        box-shadow: 0 24px 50px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        position: relative;
+        overflow: hidden;
+      }
+      .hero-shell::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 6px;
+        background: linear-gradient(90deg, var(--accent-2), var(--accent), var(--accent-2));
+      }
+      .hero-shell::after {
+        content: "";
+        position: absolute;
+        inset: -30% -15%;
+        background:
+          conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(17, 169, 237, 0.16) 35deg,
+            transparent 70deg,
+            transparent 360deg
+          );
+        mix-blend-mode: screen;
+        animation: heroSweep 10s linear infinite;
+        pointer-events: none;
+      }
+      .hero-content {
+        position: relative;
+        z-index: 2;
+        padding: 24px 18px 18px;
+      }
+      .live-orbital {
+        position: absolute;
+        width: 210px;
+        height: 210px;
+        right: -54px;
+        top: -42px;
+        pointer-events: none;
+        opacity: 0.75;
+        z-index: 1;
+      }
+      .live-orbital .ring {
+        position: absolute;
+        inset: 0;
+        border: 1px solid rgba(17, 169, 237, 0.28);
+        border-radius: 50%;
+        animation: ringBreath 3.4s ease-in-out infinite;
+      }
+      .live-orbital .ring:nth-child(2) {
+        inset: 17%;
+        animation-delay: -0.8s;
+      }
+      .live-orbital .ring:nth-child(3) {
+        inset: 34%;
+        animation-delay: -1.6s;
+      }
+      .live-orbital .arm {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 48%;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(17, 169, 237, 0.9), rgba(17, 169, 237, 0));
+        transform-origin: 0 0;
+        animation: armSpin 4.8s linear infinite;
+      }
+      .live-orbital .dot {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #7de6ff;
+        left: 74%;
+        top: 24%;
+        box-shadow: 0 0 0 0 rgba(125, 230, 255, 0.65);
+        animation: dotPulse 2.1s ease-out infinite;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-family: "Barlow Condensed", "Segoe UI", sans-serif;
+        font-size: clamp(2.25rem, 11vw, 5rem);
+        line-height: 0.96;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+      }
+      .lead {
+        margin: 0 0 18px;
+        color: var(--muted);
+        font-size: clamp(1rem, 3.9vw, 1.18rem);
+        line-height: 1.55;
+        max-width: 62ch;
+      }
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .cta-image-link {
+        min-height: 44px;
+        min-width: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 140ms ease, filter 140ms ease;
+      }
+      .cta-image-link:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.06);
+      }
+      .cta-image-link:active {
+        transform: translateY(1px);
+      }
+      .cta-image-link:focus-visible {
+        outline: 2px solid rgba(17, 169, 237, 0.5);
+        outline-offset: 2px;
+      }
+      .cta-image-link img {
+        display: block;
+        height: 46px;
+        width: auto;
+        max-width: min(245px, 72vw);
+      }
+      .pulse-line {
+        margin: 10px 0 12px;
+        height: 7px;
+        border: 1px solid #244053;
+        background: #0a141c;
+        position: relative;
+        overflow: hidden;
+      }
+      .pulse-line::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(17, 169, 237, 0.95),
+          rgba(17, 169, 237, 0.1),
+          transparent
+        );
+        transform: translateX(-100%);
+        animation: pulseTravel 2.4s ease-in-out infinite;
+      }
+      .endpoints {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .endpoint {
+        border: 1px solid #2b3f50;
+        background: #0a151d;
+        color: #b6ccdc;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1;
+        padding: 9px 10px;
+      }
+      .sections {
+        display: grid;
+        gap: 14px;
+        padding: 6px 0 36px;
+      }
+      .card {
+        border: 1px solid var(--line-soft);
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        padding: 16px;
+      }
+      .card h2 {
+        margin: 0 0 10px;
+        font-family: "Barlow Condensed", "Segoe UI", sans-serif;
+        font-size: clamp(1.45rem, 6vw, 2rem);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .grid-3 {
+        display: grid;
+        gap: 10px;
+      }
+      .mini {
+        border: 1px solid #253847;
+        background: #0c1720;
+        padding: 12px;
+      }
+      .mini strong {
+        display: block;
+        margin-bottom: 6px;
+        color: #e2f0fa;
+      }
+      .mini p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      .how-copy {
+        margin: 0;
+        color: #c8d9e7;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+      .docs-link-row {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .docs-link {
+        text-decoration: none;
+        color: #dceaf6;
+        border: 1px solid #253847;
+        background: #0b161f;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: transform 130ms ease, border-color 130ms ease, color 130ms ease;
+      }
+      .docs-link:hover {
+        transform: translateY(-1px);
+        border-color: #327090;
+        color: #eff8ff;
+      }
+      .status-row {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .status {
+        border: 1px solid #2b3f50;
+        background: #0b161f;
+        padding: 8px 10px;
+        font-size: 12px;
+        color: #c1d6e5;
+      }
+      .status-ok {
+        color: #89f2c7;
+        border-color: #2f5e4c;
+      }
+      footer {
+        border-top: 1px solid var(--line-soft);
+        margin-top: auto;
+        padding: 16px 0 26px;
+        color: #7890a3;
+        font-size: 13px;
+      }
+      .reveal {
+        opacity: 0;
+        transform: translateY(16px);
+        transition: opacity 480ms ease, transform 480ms ease;
+      }
+      .reveal.in {
+        opacity: 1;
+        transform: none;
+      }
+      @keyframes drift {
+        from {
+          transform: translate3d(0, 0, 0);
+        }
+        to {
+          transform: translate3d(-48px, -48px, 0);
+        }
+      }
+      @keyframes heroSweep {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes ringBreath {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 0.5;
+        }
+        50% {
+          transform: scale(1.04);
+          opacity: 0.92;
+        }
+      }
+      @keyframes armSpin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes dotPulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(125, 230, 255, 0.65);
+        }
+        100% {
+          box-shadow: 0 0 0 14px rgba(125, 230, 255, 0);
+        }
+      }
+      @keyframes pulseTravel {
+        0% {
+          transform: translateX(-110%);
+        }
+        60% {
+          transform: translateX(110%);
+        }
+        100% {
+          transform: translateX(110%);
+        }
+      }
+      @media (min-width: 860px) {
+        .hero {
+          padding-top: 56px;
+        }
+        .hero-content {
+          padding: 28px 24px 22px;
+        }
+        .sections {
+          gap: 16px;
+        }
+        .grid-3 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 740px) {
+        .live-orbital {
+          width: 160px;
+          height: 160px;
+          right: -48px;
+          top: -34px;
+          opacity: 0.55;
+        }
+      }
+    </style>
   </head>
   <body>
-    <main>
-      <h1>GarMCP</h1>
-      <p>Remote MCP endpoint is available at <code>/mcp</code>.</p>
+    <header class="topbar">
+      <div class="wrap topbar-inner">
+        <div class="brand-lockup">
+          <img src="/branding/GarMCP_logo_white.svg" alt="GarMCP logo" />
+        </div>
+        <span class="badge">Unofficial Connector</span>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <div class="hero-grid">
+          <article class="hero-shell reveal" data-reveal>
+            <div class="live-orbital" aria-hidden="true">
+              <span class="ring"></span>
+              <span class="ring"></span>
+              <span class="ring"></span>
+              <span class="arm"></span>
+              <span class="dot"></span>
+            </div>
+            <div class="hero-content">
+              <h1>Your Garmin Data. Claude Ready.</h1>
+              <p class="lead">
+                GarMCP is an unofficial Garmin Connect MCP server for Claude and co. Deploy in minutes on Vercel, connect Garmin, and query your training and health data with AI.
+              </p>
+              <div class="cta-row">
+                <a
+                  class="cta-image-link deploy"
+                  href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Falexanderhetzel%2FGarMCP.git&amp;env=MCP_OAUTH_ENABLED,MCP_OAUTH_CLIENT_ID,MCP_OAUTH_CLIENT_SECRET,MCP_OAUTH_SIGNING_SECRET,GARMIN_TOKEN_STORE,MCP_ALLOWED_ORIGINS,MCP_ENABLE_WRITE_TOOLS,GARMIN_MAX_CONCURRENT_REQUESTS,MCP_OAUTH_DEFAULT_SCOPES&amp;envDefaults=%7B%22MCP_OAUTH_ENABLED%22%3A%22true%22%2C%22MCP_OAUTH_CLIENT_ID%22%3A%22garmin-mcp-claude%22%2C%22GARMIN_TOKEN_STORE%22%3A%22vercel-kv%22%2C%22MCP_ALLOWED_ORIGINS%22%3A%22https%3A%2F%2Fclaude.ai%22%2C%22MCP_ENABLE_WRITE_TOOLS%22%3A%22false%22%2C%22GARMIN_MAX_CONCURRENT_REQUESTS%22%3A%221%22%2C%22MCP_OAUTH_DEFAULT_SCOPES%22%3A%22mcp%3Aread%22%7D&amp;project-name=garmcp&amp;products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%2C%22protocol%22%3A%22storage%22%7D%5D"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Deploy GarMCP on Vercel"
+                >
+                  <img src="/deploy-on-vercel.svg" alt="Deploy on Vercel" />
+                </a>
+                <a
+                  class="cta-image-link github"
+                  href="https://github.com/alexanderhetzel/GarMCP"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Get GarMCP on GitHub"
+                >
+                  <img src="/available-on-github.png" alt="Get it on GitHub" />
+                </a>
+              </div>
+              <div class="pulse-line" aria-hidden="true"></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="sections">
+        <article class="card reveal" data-reveal>
+          <h2>Why GarMCP?</h2>
+          <div class="grid-3">
+            <section class="mini">
+              <strong>Claude-First Remote MCP</strong>
+              <p>Built for Streamable HTTP and Claude custom connectors, including mobile usage.</p>
+            </section>
+            <section class="mini">
+              <strong>Read-Heavy Tooling</strong>
+              <p>90+ Garmin tools for activity, sleep, readiness, profile, and long-term trends.</p>
+            </section>
+            <section class="mini">
+              <strong>Simple Cloud Stack</strong>
+              <p>Vercel + Upstash Redis REST token storage for lightweight single-user deployments.</p>
+            </section>
+          </div>
+        </article>
+
+        <article class="card reveal" data-reveal>
+          <h2>How It Works</h2>
+          <p class="how-copy">
+            The complete setup and connector flow are documented on GitHub, including the
+            one-click deploy path, environment variables, and Claude connector configuration.
+          </p>
+          <div class="docs-link-row">
+            <a
+              class="docs-link"
+              href="https://github.com/alexanderhetzel/GarMCP#one-click-deploy-walkthrough-vercel"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open Deployment Walkthrough
+            </a>
+            <a
+              class="docs-link"
+              href="https://github.com/alexanderhetzel/GarMCP"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open GitHub Repository
+            </a>
+          </div>
+        </article>
+      </section>
     </main>
+
+    <footer>
+      <div class="wrap">
+        GarMCP is an independent open-source project and is not affiliated with Garmin Ltd.
+      </div>
+    </footer>
+
+    <script>
+      const nodes = document.querySelectorAll("[data-reveal]");
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("in");
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.15 }
+      );
+      nodes.forEach((node) => observer.observe(node));
+    </script>
   </body>
 </html>
